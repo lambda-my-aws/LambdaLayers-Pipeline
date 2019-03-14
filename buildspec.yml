@@ -1,0 +1,23 @@
+
+version: 0.2
+phases:
+  install:
+    commands:
+      - curl https://bootstrap.pypa.io/get-pip.py -o get-pip.py
+      - python get-pip.py
+      - pip install virtualenv
+      - pip install pipenv
+  build:
+    commands:
+      - export PY_VERSION=`echo $CODEBUILD_BUILD_IMAGE|cut -d ':' -f 2`
+      - export PY_VERSION=`echo $PY_VERSION | awk -F. '{print "python"$1"."$2}'`
+      - export PY_BUILD=$PWD/build/python/lib/${PY_VERSION}/site-packages
+      - echo $PY_VERSION
+      - echo $PY_BUILD
+      - mkdir -p $PY_BUILD
+      - pip install -r requirements.txt --no-deps -t $PY_BUILD
+artifacts:
+  base-directory: build
+  files:
+    - '**/*'
+
