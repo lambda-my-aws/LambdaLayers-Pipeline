@@ -6,15 +6,64 @@ We want to create a pipeline that creates new Lambda Layers, but to achieve this
 
 So initially we need to operate in an orderly fashion.
 
-- Create the roles stack
-- Create the zip file for your layer from your local environment, using the same method as in your buildspec.yml
-- Generate the template from CLI using `python lambda_layer_version_pipeline_template_generator.py`
-- Create the stack to create your first lambda layer
-- Bundle the lambda function / script you used in step one and upload it to s3
-- Generate the template to create the lambda function
-- Create the stack to create the lambda function that uses the layer generated in step 2
-- Create the pipeline
-- Clone repository
-- Add buildspec.yml and your requirements.txt file
-- Enjoy the ride
+I added script to create the stack because I got bored of creating the file, and runnig the awscli to create the stacks.
 
+- Create the roles stack
+```bash
+
+python lambda_layer_pipeline_roles.py --yaml --create-stack
+
+```
+- Create the zip containing the git function with
+```bash
+
+./build_function.sh codecommit_repo_initializer.py
+aws s3 cp s3://some-bucket/some/key/prefix/git_init.zip
+
+```
+
+- Create the stack to create the Lambda function
+```bash
+
+python codecommit_init_function.py  --yaml --create-stack  --s3-bucket some-bucket --s3-key some/key/prefix/git_init.zip
+
+```
+
+- Create the zip file for your layer from your local environment, using the same method as in your buildspec.yml
+```bash
+
+./build_layer.sh
+aws s3 cp layer.zip s3://some-bucket/some/key/prefix/layer.zip
+
+```
+- Create the stack to create the troposphere layer
+```
+
+python lambda_layer_pipeline.py --yaml --create-stack --layer-name troposphere
+
+```
+
+- Create the stack to create the Pipeline Troposphere CFN template generator (I know, need to come with a nicer name)
+```bash
+
+python lambda_layer_version_pipeline_template_generator.py --yaml --create-stack --create-ssm --s3-bucket some-bucket --s3-key some/key/prefix/layer.zip --layer-name troposphere
+
+```
+
+NOTE - creating the SSM value is important to allow the other stacks to identify the layer ARN / Name. Using SSM instead of exports, but feel free to use what matches most your use-case.
+
+At this point you should have
+- Lambda function for the git init
+- Lambda function for the template generator for pipeline
+- Pipeline roles
+- The Troposphere layer
+
+Congratulations, last step:
+
+```bash
+
+python lambda_layer_pipeline.py --yaml --layer-name troposphere --create-stack
+
+```
+
+That's it, once the stack is crated, you closed the loop (chicken, eggs, I know ..) and you can simply create as many pipeline stacks as you want for each layers you will want to create and use across your accounts (note that layers are shareable across accounts).
