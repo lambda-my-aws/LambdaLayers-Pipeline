@@ -1,9 +1,11 @@
 #!/usr/bin/env python
-
+"""
+Lambda Function to initialize a new branch into an empty repository by creating a new commit
+Uses boto3 v1.9.43 to create the commit
+"""
 from urllib.request import build_opener, HTTPHandler, Request
 import json
 import logging
-import signal
 import boto3
 
 LOGGER = logging.getLogger()
@@ -25,9 +27,9 @@ def create_initial_branch(repository_name, branch_name='master'):
         )
         LOGGER.info(commit['commitId'])
         return (True, commit['commitId'])
-    except Exception as e:
-        LOGGER.info(e)
-        return (False, e)
+    except Exception as error:
+        LOGGER.info(error)
+        return (False, error)
 
 
 
@@ -35,7 +37,6 @@ def lambda_handler(event, context):
     """
     Lambda Functio Handler
     """
-    '''Handle Lambda event from AWS'''
     # Setup alarm for remaining runtime minus a second
     if event['RequestType'] == 'Create':
         if not 'RepositoryName' in event['ResourceProperties'].keys():
@@ -52,36 +53,28 @@ def lambda_handler(event, context):
         )
         if commit[0]:
             send_response(
-                event,
-                context,
-                "SUCCESS",
+                event, context, "SUCCESS",
                 {
                     "Message": "Resource creation successful!"
                 }
-        )
+            )
         else:
             send_response(
-                event,
-                context,
-                "FAILURE",
+                event, context, "FAILURE",
                 {
                     "Message": commit[1]
                 }
             )
     elif event['RequestType'] == 'Update':
         send_response(
-            event,
-            context,
-            "SUCCESS",
+            event, context, "SUCCESS",
             {
                 "Message": "Resource update successful!"
             }
         )
     elif event['RequestType'] == 'Delete':
         send_response(
-            event,
-            context,
-            "SUCCESS",
+            event, context, "SUCCESS",
             {
                 "Message": "Resource deletion successful!"
             }
@@ -89,11 +82,9 @@ def lambda_handler(event, context):
     else:
         LOGGER.info('FAILED!')
         send_response(
-            event,
-            context,
-            "FAILED",
+            event, context, "FAILED",
             {
-            "Message": "Unexpected event received from CloudFormation"
+                "Message": "Unexpected event received from CloudFormation"
             }
         )
 
@@ -108,7 +99,7 @@ def send_response(event, context, response_status, response_data):
             "StackId": event['StackId'],
             "RequestId": event['RequestId'],
             "LogicalResourceId": event['LogicalResourceId'],
-        "Data": response_data
+            "Data": response_data
         }
     )
 

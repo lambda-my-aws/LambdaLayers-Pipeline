@@ -1,15 +1,20 @@
+#!/usr/bin/env python
+"""
+Script using Troposphere to generate a CFN Template which creates a new Lambda Function.
+This Function sets a new commit in a newly created repository which didn't have a master branch
+in order to allow CodePipeline (or else) to work on initialization
+"""
+
 from troposphere import (
     Template,
     Parameter,
     Output,
-    Ref,
-    Join,
-    GetAtt
+    GetAtt,
+    Ref
 )
 from troposphere.awslambda import (
     Function,
-    Code,
-    Content
+    Code
 )
 from troposphere.ssm import (
     Parameter as SSMParam
@@ -19,25 +24,27 @@ from troposphere.iam import (
 )
 
 TEMPLATE = Template()
-TEMPLATE.add_description("""Template to create the Lambda Function that initializes """
-                         """the codecommit repository with an initial branch to allow pipeline to work"""
+TEMPLATE.add_description(
+    """Template to create the Lambda Function that initializes """
+    """the codecommit repository with an initial branch to allow pipeline to work"""
 )
 
-platform_init_bucket = TEMPLATE.add_parameter(Parameter(
-    "PlatformInitialSourceBucket",
+
+FUNCTION_BUCKET = TEMPLATE.add_parameter(Parameter(
+    "LambdaFunctionBucketName",
     Type="String",
     AllowedPattern="[\\x20-\\x7E]*"
 ))
 
 
-codecommit_init_code_s3_key = TEMPLATE.add_parameter(Parameter(
-    "CodeCommitCodeS3Key",
+FUNCTION_CODE_S3_KEY = TEMPLATE.add_parameter(Parameter(
+    "LambdaFunctionS3Key",
     Type="String",
     AllowedPattern="[\\x20-\\x7E]*"
 ))
 
 
-lambda_role = TEMPLATE.add_resource(Role(
+LAMBDA_ROLE = TEMPLATE.add_resource(Role(
     "LambdaRole",
     AssumeRolePolicyDocument={
         "Version" : "2012-10-17",
@@ -45,10 +52,13 @@ lambda_role = TEMPLATE.add_resource(Role(
             {
                 "Effect": "Allow",
                 "Principal": {
-                    "Service": [ "lambda.amazonaws.com"
-                             ]
+                    "Service": [
+                        "lambda.amazonaws.com"
+                    ]
                 },
-                "Action": [ "sts:AssumeRole" ]
+                "Action": [
+                    "sts:AssumeRole"
+                ]
             }
         ]
     },
@@ -99,43 +109,43 @@ lambda_role = TEMPLATE.add_resource(Role(
     ]
 ))
 
-lambda_function = TEMPLATE.add_resource(Function(
+LAMBDA_FUNCTION = TEMPLATE.add_resource(Function(
     "CodeCommitInit",
     Code=Code(
-        S3Bucket=Ref(platform_init_bucket),
-        S3Key=Ref(codecommit_init_code_s3_key)
+        S3Bucket=Ref(FUNCTION_BUCKET),
+        S3Key=Ref(FUNCTION_CODE_S3_KEY)
     ),
     Handler='codecommit_repo_initializer.lambda_handler',
-    Role=GetAtt(lambda_role, 'Arn'),
+    Role=GetAtt(LAMBDA_ROLE, 'Arn'),
     Runtime="python3.7",
     MemorySize="128",
     Timeout=5,
 ))
 
 
-ssm_function_arn = TEMPLATE.add_resource(SSMParam(
+SSM_FUNCTION_ARN = TEMPLATE.add_resource(SSMParam(
     "SsmLambdaFunctionArn",
     Name='CodePipelineTools-CodeCommitInit-Arn',
-    Value=GetAtt(lambda_function, 'Arn'),
+    Value=GetAtt(LAMBDA_FUNCTION, 'Arn'),
     Type="String"
 ))
 
-ssm_function_name = TEMPLATE.add_resource(SSMParam(
+SSM_FUNCTION_NAME = TEMPLATE.add_resource(SSMParam(
     "SsmLambdaFunctionName",
     Name='CodePipelineTools-CodeCommitInit-Name',
-    Value=Ref(lambda_function),
+    Value=Ref(LAMBDA_FUNCTION),
     Type="String"
 ))
 
 TEMPLATE.add_output([
     Output(
         "LambdaFunctionArn",
-        Value=GetAtt(lambda_function, 'Arn'),
+        Value=GetAtt(LAMBDA_FUNCTION, 'Arn'),
         Description="ARN of the Lambda Function"
     ),
     Output(
         "LambbdaFunctionName",
-        Value=Ref(lambda_function),
+        Value=Ref(LAMBDA_FUNCTION),
         Description="Name of the Lambda Function"
     )
 ])
@@ -146,17 +156,20 @@ if __name__ == '__main__':
     import sys
     PARSER = argparse.ArgumentParser("Generate a template for a new Lambda Function")
     PARSER.add_argument(
-        "--yaml", required=False, action='store_true', help="Render in YAML"
+        "--yaml", required=False, action='store_true',
+        help="Render in YAML"
     )
     PARSER.add_argument(
-        "--create-stack", action='store_true', help="Creates a new stack with the generated template"
+        "--create-stack", action='store_true',
+        help="Creates a new stack with the generated template"
     )
     PARSER.add_argument(
         "--s3-bucket", required=False,
         help="Name of the s3 bucket that contains the Layer code"
     )
     PARSER.add_argument(
-        "--s3-key", required=False, help="Name of the s3 key that contains the Layer code"
+        "--s3-key", required=False,
+        help="Name of the s3 key that contains the Layer code"
     )
     ARGS = PARSER.parse_args()
     if ARGS.create_stack and not (ARGS.s3_bucket and ARGS.s3_key):
@@ -169,18 +182,18 @@ if __name__ == '__main__':
 
     if ARGS.create_stack:
         import boto3
-        client = boto3.client('cloudformation')
+        CLIENT = boto3.client('cloudformation')
         try:
-            client.create_stack(
+            CLIENT.create_stack(
                 StackName="CodePipeline-Tools-GitInit-platform",
                 TemplateBody=TEMPLATE.to_json(),
                 Parameters=[
                     {
-                        'ParameterKey': platform_init_bucket.title,
+                        'ParameterKey': FUNCTION_BUCKET.title,
                         'ParameterValue': ARGS.s3_bucket
                     },
                     {
-                        'ParameterKey': codecommit_init_code_s3_key.title,
+                        'ParameterKey': FUNCTION_CODE_S3_KEY.title,
                         'ParameterValue': ARGS.s3_key
                     }
                 ],
@@ -195,6 +208,5 @@ if __name__ == '__main__':
                     }
                 ]
             )
-        except Exception as e:
-            print(e)
-
+        except Exception as error:
+            print(error)
