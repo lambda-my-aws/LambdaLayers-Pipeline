@@ -98,17 +98,9 @@ def generate_template(description, layer_name, layer_s3_bucket, layer_s3_key, jo
     """
     template = init_template(description)
     resource_name = "LambdaLayerVersion"
-    if job_id is str:
+    if job_id is not None:
         resource_name += job_id.split('-')[0]
-        layer_version = create_lambda_layer_version(
-            resource_name,
-            layer_name,
-            layer_s3_bucket,
-            layer_s3_key,
-            job_id
-        )
-    else:
-        layer_version = create_lambda_layer_version(
+    layer_version = create_lambda_layer_version(
             resource_name,
             layer_name,
             layer_s3_bucket,
@@ -151,6 +143,7 @@ def lambda_handler(event, context):
 
 
         job_id = event["CodePipeline.job"]['id']
+        print(job_id)
 
         layer_name = data['actionConfiguration']['configuration']['UserParameters']
         template = generate_template(
@@ -158,7 +151,7 @@ def lambda_handler(event, context):
             layer_name,
             layer_s3_bucket,
             layer_s3_key,
-            job_id,
+            job_id=job_id,
             ssm=True
         )
         key_file_name = dest_s3_key.split('/')[-1]

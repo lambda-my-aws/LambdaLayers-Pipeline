@@ -39,16 +39,20 @@ aws s3 cp layer.zip s3://some-bucket/some/key/prefix/layer.zip
 - Create the stack to create the troposphere layer
 ```
 
-python lambda_layer_pipeline.py --yaml --create-stack --layer-name troposphere
-
-```
-
-- Create the stack to create the Pipeline Troposphere CFN template generator (I know, need to come with a nicer name)
-```bash
-
 python lambda_layer_version_pipeline_template_generator.py --yaml --create-stack --create-ssm --s3-bucket some-bucket --s3-key some/key/prefix/layer.zip --layer-name troposphere
 
 ```
+
+- Create the pipeline template generator function
+
+```bash
+
+./build_function.sh lambda_layer_pipeline_generator_function.py
+aws s3 cp function.zip s3://some-bucket/some/prefix/key/generator.zip
+python lambda_layer_pipeline_generator_function.py --yaml  --create-stack  --s3-bucket some-bucke --s3-key some/prefix/key/generator.zip
+
+```
+
 
 NOTE - creating the SSM value is important to allow the other stacks to identify the layer ARN / Name. Using SSM instead of exports, but feel free to use what matches most your use-case.
 
