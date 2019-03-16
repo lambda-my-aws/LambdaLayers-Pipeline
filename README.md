@@ -16,7 +16,7 @@ I emphasize on the fact that you are not creating a new Lambda Layer, but a new 
 Why use a Lambda Function to generate the new template ?
 -------------------------------------------------------------
 
-In addition to the LogicalId situation explained above, the other reason is that the cli `aws cloudformation package` which would normally replace the `Code` properties of where your new Zip file of the Lambda Function is into your source template and generate the one bespoke necessary for the Deploy step using CloudFormation, at the time of writting this, package does not support the LambdaLayer attribute.
+In addition to the LogicalId situation explained above, the other reason is that the cli `aws cloudformation package` which would normally replace the `Code` properties of where your new Zip file of the Lambda Function is into your source template and generate the one bespoke necessary for the Deploy step using CloudFormation, at the time of writting this, package does not support the LambdaLayer object / Resource Type.
 
 Why not run Troposphere within the build step?
 ---------------------------------------------------
