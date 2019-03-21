@@ -47,7 +47,7 @@ python lambda_layer_version_pipeline_template_generator.py --yaml --create-stack
 
 ```bash
 
-./build_function.sh lambda_layer_pipeline_generator_function.py
+./build_function.sh lambda_layer_version_pipeline_template_generator.py
 aws s3 cp function.zip s3://some-bucket/some/prefix/key/generator.zip
 python lambda_layer_pipeline_generator_function.py --yaml  --create-stack  --s3-bucket some-bucke --s3-key some/prefix/key/generator.zip
 

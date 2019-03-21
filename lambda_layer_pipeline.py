@@ -163,7 +163,7 @@ pipeline = TEMPLATE.add_resource(
                         Configuration={
                             'RepositoryName': GetAtt(codecommit_repository, 'Name'),
                             'BranchName': 'master',
-                            'PollForSourceChanges': False
+                            'PollForSourceChanges': True
                         },
                         OutputArtifacts=[
                             OutputArtifacts(
