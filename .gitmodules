@@ -1,0 +1,6 @@
+[submodule "cloudformation"]
+	path = cloudformation
+	url = git@github.com:lambda-my-aws/Layer-cloudformation
+[submodule "codebuild"]
+	path = codebuild
+	url = git@github.com:JohnPreston/Layer-codebuild.git
