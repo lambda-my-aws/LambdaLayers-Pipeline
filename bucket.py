@@ -1,10 +1,9 @@
 """
 Generic Bucket build attempt
 """
-
-S3_ARN = 'arn:aws:s3:::'
-
-from troposphere import Sub
+from troposphere import (
+    Sub
+)
 from troposphere.s3 import (
     Bucket,
     LifecycleConfiguration,
@@ -21,10 +20,18 @@ from troposphere.s3 import (
     ReplicationConfigurationRulesDestination,
     EncryptionConfiguration
 )
-from cloudformation.tags.s3 import s3_default_tags
+from cloudformation.tags.s3 import (
+    s3_default_tags
+)
+
+S3_ARN = 'arn:aws:s3:::'
 
 def set_replication_rule(replica_bucket, **kwargs):
-    if type(replica_bucket) is str:
+    """
+    returns:
+        Bucket replication rule
+    """
+    if isinstance(replica_bucket, str):
         if replica_bucket.startswith('arn:aws:s3:::'):
             replica_bucket_arn = replica_bucket
         else:
@@ -63,6 +70,10 @@ def set_replication_rule(replica_bucket, **kwargs):
 
 
 def set_bucket_replication(**kwargs):
+    """
+    returns:
+        bucket replication configuration
+    """
     config = ReplicationConfiguration(
         Role=kwargs['ReplicationRole'],
         Rules=[
@@ -93,7 +104,7 @@ def set_bucket_lifecycle():
     return config
 
 
-def set_bucket_encryption(**kwargs):
+def set_bucket_encryption():
     """
     returns:
         EncryptionConfiguration for S3Bucket
@@ -158,15 +169,18 @@ def bucket_build(bucket_name, **kwargs):
 
 if __name__ == '__main__':
     import json
-    print(json.dumps(
-        bucket_build('test',
-            UseEncryption=False,
-            UseLifecycle=False,
-            UseReplication=True,
-            UseEncryptionReplication=False,
-            ReplicationRole='arn:aws:iam:::role/toto',
-            DestinationBucket='destination-finale',
-            EncryptionKeyId=Sub('some-id-like-that')
-        ).to_dict(),
-        indent=2
-    ))
+    print(
+        json.dumps(
+            bucket_build(
+                'test',
+                UseEncryption=False,
+                UseLifecycle=False,
+                UseReplication=True,
+                UseEncryptionReplication=False,
+                ReplicationRole='arn:aws:iam:::role/toto',
+                DestinationBucket='destination-finale',
+                EncryptionKeyId=Sub('some-id-like-that')
+            ).to_dict(),
+            indent=2
+        )
+    )
