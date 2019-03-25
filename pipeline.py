@@ -1,26 +1,7 @@
 from troposphere import (
-
     Template,
     Parameter,
     Output
-)
-from troposphere import (
-    AWS_ACCOUNT_ID,
-    AWS_STACK_NAME,
-    AWS_REGION
-)
-from troposphere import (
-    Select,
-    GetAtt,
-    Split,
-    Ref,
-    Sub
-)
-from troposphere import (
-    Condition,
-    Equals,
-    Not,
-    If
 )
 from troposphere.codepipeline import (
     Pipeline,
@@ -32,121 +13,30 @@ from troposphere.codepipeline import (
     ArtifactStore,
     DisableInboundStageTransitions
 )
-from troposphere.codebuild import (
-    Environment,
-    Source,
-    Project,
-    Artifacts
+from cloudformation.resources.devtools.pipeline import (
+    use_github_source,
+    use_codecommit_source,
+    set_source_action,
+    set_build_action,
+    set_stage,
+    pipeline_build
 )
-from troposphere.codecommit import Repository as Repo
-from common import (
-    LambdaFunctionCall
+import argparse
+
+PARSER = argparse.ArgumentParser("Generate a template to create a new pipeline for Lambda Layers")
+PARSER.add_argument(
+    "--json", required=False, action='store_true', help="Render in JSON"
 )
-
-
-def use_github_source(**kwargs):
-    config = kwargs['Configuration']
-    for key in ['Repo', 'Branch', 'Owner', 'OAuthToken']:
-        if not key in config.keys():
-            raise AttributeError(f'GitHub source requires {key}')
-        elif not isinstance(config[key], (Ref, Sub, GetAtt, str)):
-            raise TypeError(f'{key} has to be of type', Ref, Sub, GetAtt, str)
-
-    action = ActionTypeId(
-        Category="Source",
-        Owner="ThirdParty",
-        Provider="GitHub",
-        Version="1"
-    )
-    config = kwargs
-    config['PollForSourceChanges']: False
-    return (action, config)
-
-
-def use_codecommit_source(**kwargs):
-    config = kwargs['Configuration']
-    for key in ['RepositoryName', 'BranchName']:
-        if not key in config.keys():
-            raise AttributeError(f'GitHub source requires {key}')
-        elif not isinstance(config[key], (Ref, Sub, GetAtt, str)):
-            raise TypeError(f'{key} has to be of type', Ref, Sub, GetAtt, str)
-    action = ActionTypeId(
-        Category="Source",
-        Owner="AWS",
-        Provider="CodeCommit",
-        Version="1"
-    )
-    return (action, config)
-
-
-def set_source_action(output_artifacts, **kwargs):
-    if 'UseGitHub' in kwargs.keys() and kwargs['UseGitHub']:
-        action_config = use_github_source(**kwargs)
-    elif 'UseCodeCommit' in kwargs.keys() and kwargs['UseCodeCommit']:
-        action_config = use_codecommit(**kwargs)
-
-    action = Actions(
-        Name="SourceAction",
-        ActionTypeId=action_config[0],
-        Configuration=action_config[1],
-        OutputArtifacts=output_artifacts,
-        RunOrder="1"
-    )
-    return action
-
-
-def set_build_action(input_artifacts, output_artifacts, build_project_stack, **kwargs):
-    """
-    """
-    action = Actions(
-        Name="BuildLayer",
-        InputArtifacts=input_artifacts,
-        ActionTypeId=ActionTypeId(
-            Category="Build",
-            Owner="AWS",
-            Version="1",
-            Provider="CodeBuild"
-        ),
-        Configuration={
-            'ProjectName' : Sub(
-                '${{{build_project_stack.title}}}-BuildProject-Name'
-                )
-        },
-        OutputArtifacts=output_artifacts,
-        RunOrder="1"
-    )
-    return action
-
-
-def set_stage(name, actions):
-    """
-    """
-    stage = Stages(
-        Name=name,
-        Actions=actions
-    )
-    return stage
-
-
-def pipeline_build(stages, **kwargs):
-    """
-    returns:
-        Pipeline
-    """
-    pipeline = Pipeline(
-        "LayerPipeline",
-        RestartExecutionOnUpdate=True,
-        RoleArn='arn:aws:iam:::role/test',
-        Stages=stages,
-        ArtifactStore=ArtifactStore(
-            Type="S3",
-            Location="bucket"
-        )
-    )
-    return pipeline
-
-
+PARSER.add_argument(
+    '--layer-name', required=False, help="The name of the lambda layer to create the pipeline for"
+)
+PARSER.add_argument(
+    '--build-stacks', action='append', required=False,
+    help="Name of the stacks which contain a valid build project for that pipeline"
+)
+ARGS = PARSER.parse_args()
 TEMPLATE = Template()
+TEMPLATE.set_description('Pipeline template')
 SOURCE_OUTPUT_ARTIFACT = OutputArtifacts(
     Name="BuildSource"
 )
@@ -170,27 +60,26 @@ BUILD_OUTPUT_ARTIFACT = OutputArtifacts(
     Name="BuildArtifact"
 )
 BUILD_OUTPUTS = [BUILD_OUTPUT_ARTIFACT]
-
-
+BUILD_PROJECT_STACK = Parameter('BuildProjectStack', Type="CommaDelimitedList")
+BUILD_STAGE_ACTION_A = set_build_action(
+    BUILD_INPUTS,
+    BUILD_OUTPUTS,
+    BUILD_PROJECT_STACK
+)
+BUILD_STAGE_ACTION_B = set_build_action(
+    BUILD_INPUTS,
+    BUILD_OUTPUTS,
+    BUILD_PROJECT_STACK
+)
+BUILD_STAGE = set_stage('Build', [BUILD_STAGE_ACTION_A, BUILD_STAGE_ACTION_B])
 PIPELINE = pipeline_build(
     [
-        SOURCE_STAGE
+        SOURCE_STAGE,
+        BUILD_STAGE
     ]
 )
 TEMPLATE.add_resource(PIPELINE)
-
-if __name__ == '__main__':
-    import argparse
-    import sys
-    PARSER = argparse.ArgumentParser("Generate a template to create a new pipeline for Lambda Layers")
-    PARSER.add_argument(
-        "--json", required=False, action='store_true', help="Render in JSON"
-    )
-    PARSER.add_argument(
-        '--layer-name', required=False, help="The name of the lambda layer to create the pipeline for"
-    )
-    ARGS = PARSER.parse_args()
-    if ARGS.json:
-        print(TEMPLATE.to_json())
-    else:
-        print(TEMPLATE.to_yaml())
+if ARGS.json:
+    print(TEMPLATE.to_json())
+else:
+    print(TEMPLATE.to_yaml())

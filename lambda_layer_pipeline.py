@@ -10,7 +10,12 @@ from troposphere import (
     GetAtt,
     Sub
 )
-
+from troposphere import (
+    Condition,
+    Equals,
+    Not,
+    If
+)
 from troposphere.codepipeline import (
     Pipeline, Stages, Actions, ActionTypeId,
     OutputArtifacts, InputArtifacts, ArtifactStore,
@@ -24,102 +29,50 @@ from troposphere.codebuild import (
     Artifacts
 )
 
-from troposphere.cloudformation import AWSCustomObject
 from troposphere.codecommit import Repository as Repo
-
+from common import (
+    LambdaFunctionCall
+)
 
 TEMPLATE = Template()
 TEMPLATE.add_description("Generate a CICD pipeline for a new Lambda Layer")
 
 # Parameters - need to have a value at CFN stack Creation
 
-layer_name = TEMPLATE.add_parameter(Parameter(
-    "LambdaLayerName",
-    Type="String",
-    AllowedPattern="[a-z]*"
-))
 
+CONDITIONS = {
+    "UseCodeCommit": Equals(
+        Ref(REPOSITORY_PROVIDER),
+        "CodeCommit"
+    ),
+    "UseGitHub": Not(
+        Condition("UseCodeCommit")
+    )
+}
 
-lambda_layer_cfn_generator_function = TEMPLATE.add_parameter(Parameter(
-    "LambdaLayerCloudFormationGeneratorFunctionName",
-    Type="AWS::SSM::Parameter::Value<String>",
-    Default="LambdaLayers-GeneratorFunction-Name"
-
-))
-
-codecommit_init_function = TEMPLATE.add_parameter(Parameter(
-    "CodeCommitInitFunction",
-    Type="AWS::SSM::Parameter::Value<String>",
-    Default="CodePipelineTools-CodeCommitInit-Arn"
-
-))
-
-layers_dest_bucket = TEMPLATE.add_parameter(Parameter(
-    "DestArtifactsBucket",
-    Description="Bucket in which store the built Lambda Layer",
-    Type="AWS::SSM::Parameter::Value<String>",
-    Default="LambdaLayers-ArtifactsBucket"
-))
-
-
-lambda_layer_build_role_arn = TEMPLATE.add_parameter(Parameter(
-    "LambdaLayersCodeBuildRoleArn",
-    Type="AWS::SSM::Parameter::Value<String>",
-    Default="LambdaLayersPipeline-CodeBuildRoleArn"
-))
-
-
-lambda_layer_pipeline_role_arn = TEMPLATE.add_parameter(Parameter(
-    "LambdaLayersCodePipelineRoleArn",
-    Type="AWS::SSM::Parameter::Value<String>",
-    Default="LambdaLayersPipeline-CodePipelineRoleArn"
-))
-
-
-lambda_layer_cfn_role_arn = TEMPLATE.add_parameter(Parameter(
-    "LambdaLayersCloudFormationRoleArn",
-    Type="AWS::SSM::Parameter::Value<String>",
-    Default="LambdaLayersPipeline-CloudFormationRoleArn"
-))
-
-
+for p in PARAMETERS:
+    TEMPLATE.add_parameter(p, PARAMETERS[p])
+for k in CONDITIONS:
+    TEMPLATE.add_condition(k, CONDITIONS[k])
 # Resources
 
-codecommit_repository = TEMPLATE.add_resource(Repo(
-    "LambdaLayerRepository",
-    RepositoryDescription=Sub('Repository for ${LambdaLayerName}'),
-    RepositoryName=Sub('layer-${LambdaLayerName}')
-))
 
-
-class LambdaFunctionCall(AWSCustomObject):
-    resource_type = "AWS::CloudFormation::CustomResource"
-    props = {
-        'ServiceToken': (str, True),
-        'RepositoryName': (str, True),
-        'BranchName': (str, False)
-    }
-
-codecommit_init = TEMPLATE.add_resource(
-    LambdaFunctionCall(
+RESOURCES = [
+    codecommit_repository = Repo(
+        "LambdaLayerRepository",
+        Condition="UseCodeCommit",
+        RepositoryDescription=Sub('Repository for ${LambdaLayerName}'),
+        RepositoryName=Sub('layer-${LambdaLayerName}')
+    )
+    codecommit_init = LambdaFunctionCall(
         "CodeCommitInitRepo",
-        DependsOn=[
-            codecommit_repository.title
-        ],
+        Condition="UseCodeCommit",
         DeletionPolicy='Retain',
         RepositoryName=GetAtt(codecommit_repository, 'Name'),
         ServiceToken=Ref(codecommit_init_function)
     )
-)
-
-
-codebuild_project = TEMPLATE.add_resource(
-    Project(
+    codebuild_project = Project(
         "LayerBuildProject",
-        DependsOn=[
-            codecommit_repository.title,
-            codecommit_init.title
-        ],
         Source=Source(Type='CODEPIPELINE'),
         Artifacts=Artifacts(
             Type='CODEPIPELINE',
@@ -131,48 +84,19 @@ codebuild_project = TEMPLATE.add_resource(
             Image='aws/codebuild/python:3.7.1',
             Type='LINUX_CONTAINER',
             EnvironmentVariables=[]
-    ),
+        ),
         Name=Sub('${LambdaLayerName}-BuildProject'),
         ServiceRole=Ref(lambda_layer_build_role_arn)
     )
-)
-
-import json
-
-pipeline = TEMPLATE.add_resource(
-    Pipeline(
+    pipeline = Pipeline(
         "LayerPipeline",
         RestartExecutionOnUpdate=True,
-        DependsOn=[
-            codecommit_repository.title,
-            codecommit_init.title
-        ],
         RoleArn=Ref(lambda_layer_pipeline_role_arn),
         Stages=[
-            Stages(
-                Name="Source",
-                Actions=[
-                    Actions(
-                        Name="SourceAction",
-                        ActionTypeId=ActionTypeId(
-                            Category="Source",
-                            Owner="AWS",
-                            Provider="CodeCommit",
-                            Version="1",
-                        ),
-                        Configuration={
-                            'RepositoryName': GetAtt(codecommit_repository, 'Name'),
-                            'BranchName': 'master',
-                            'PollForSourceChanges': True
-                        },
-                        OutputArtifacts=[
-                            OutputArtifacts(
-                                Name="BuildSource"
-                            )
-                        ],
-                        RunOrder="1"
-                    )
-                ]
+            If(
+                "UseCodeCommit",
+                CODECOMMIT_STAGE,
+                GITHUB_STAGE
             ),
             Stages(
                 Name="Build",
@@ -268,15 +192,27 @@ pipeline = TEMPLATE.add_resource(
 TEMPLATE.add_output([
     Output(
         "LambdaLayerRepositoryCloneUrlHttp",
-        Value=GetAtt(codecommit_repository, 'CloneUrlHttp')
+        Value=If(
+            "UseCodeCommit",
+            GetAtt(codecommit_repository, 'CloneUrlHttp'),
+            Ref(REPOSITORY_NAME)
+        )
     ),
     Output(
         "LambdaLayerRepositoryArn",
-        Value=GetAtt(codecommit_repository, 'Arn')
+        Value=If(
+            "UseCodeCommit",
+            GetAtt(codecommit_repository, 'Arn'),
+            Ref(REPOSITORY_NAME)
+        )
     ),
     Output(
         "LambdaLayerRepositoryName",
-        Value=GetAtt(codecommit_repository, 'Name')
+        Value=If(
+            "UseCodeCommit",
+            GetAtt(codecommit_repository, 'Name'),
+            Ref(REPOSITORY_NAME)
+        )
     ),
     Output(
         "LambdaLayerBuildProjectName",

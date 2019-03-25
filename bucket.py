@@ -18,7 +18,7 @@ from cloudformation.outputs import (
     output_with_export
 )
 from cloudformation.tags.s3 import s3_default_tags
-from cloudformation.resources.bucket import bucket_build
+from cloudformation.resources.s3.bucket import bucket_build
 import argparse
 
 PARSER = argparse.ArgumentParser("replica bucket with kms ey for encryption")
@@ -30,7 +30,12 @@ ARGS = PARSER.parse_args()
 
 TEMPLATE = Template()
 TEMPLATE.set_description("S3 Bucket to which is replicated objects from another bucket")
-BUCKET = bucket_build('pipelines-artifacts-ews-platform', UseEncryption=True)
+BUCKET_NAME = TEMPLATE.add_parameter(Parameter(
+    'S3BucketName',
+    Type="String",
+    AllowedPattern='[a-z-]+'
+))
+BUCKET = TEMPLATE.add_resource(bucket_build(Ref(BUCKET_NAME), UseEncryption=True))
 BUCKET_SSM = TEMPLATE.add_resource(
     SSMParam(
         "SsmBucketName",
@@ -42,7 +47,6 @@ BUCKET_SSM = TEMPLATE.add_resource(
 OUTPUTS = output_with_export(
     BUCKET, True
 )
-TEMPLATE.add_resource(BUCKET)
 TEMPLATE.add_output(OUTPUTS)
 
 if ARGS.json:
