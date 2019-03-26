@@ -4,28 +4,10 @@ Script to create a CodeBuild project
 """
 from troposphere import (
     Template,
-    Parameter,
-    Output,
-    Tags
+    Parameter
 )
 from troposphere import (
-    ImportValue,
-    FindInMap,
-    GetAtt,
-    Select,
-    Split,
-    Ref,
-    Sub
-)
-from troposphere.codebuild import (
-    Environment,
-    Source,
-    Project,
-    Artifacts
-)
-from troposphere.iam import (
-    Role,
-    Policy
+    Ref
 )
 from cloudformation.outputs import (
     output_with_export,
