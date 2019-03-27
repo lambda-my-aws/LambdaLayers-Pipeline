@@ -1,7 +1,12 @@
 #!/usr/bin/env python
 """
-Script to generate a CodePipeline
+Script to generate a CodePipeline pipeline with
+- Source from GitHub
+- Build Stage with 2 actions
+- Lambda invoke
+- CloudFormation deploy
 """
+
 from troposphere import (
     ImportValue,
     Parameter,
@@ -51,7 +56,6 @@ PARSER.add_argument(
 )
 ARGS = PARSER.parse_args()
 
-
 TEMPLATE = Template()
 TEMPLATE.set_description('Pipeline template')
 ## PARAMETERS ##
@@ -65,6 +69,10 @@ LAYER_NAME = TEMPLATE.add_parameter(Parameter(
     'LayerName',
     Type="String",
     AllowedPattern="[a-z]+"
+))
+PIPELINE_FUNCTION = TEMPLATE.add_parameter(Parameter(
+    'TemplateGeneratorFunction',
+    Type="String"
 ))
 TOKEN = TEMPLATE.add_parameter(Parameter(
     'GitHubToken',
@@ -110,7 +118,10 @@ BUILD_INPUTS = [BUILD_INPUT_ARTIFACT]
 BUILD_ACTIONS = []
 ACOUNT = 'A'
 NCOUNT = 0
-for build in ARGS.build_stacks:
+BUILD_STACKS = []
+if ARGS.build_stacks:
+    BUILD_STACKS = ARGS.build_stacks
+for build in BUILD_STACKS:
     resource_type = get_resource_type(Project)
     BUILD_ACTIONS.append(
         set_build_action(
@@ -123,7 +134,6 @@ for build in ARGS.build_stacks:
     )
     COUNT = INC(ACOUNT)
     NCOUNT += 1
-
 BUILD_STAGE = set_stage('Build', BUILD_ACTIONS)
 ## END ##
 ## DEPLOY STAGE ##
@@ -139,7 +149,7 @@ DEPLOY_STAGE_ACTION_CFN = set_deploy_action(
 DEPLOY_STAGE = set_stage('Deploy', [DEPLOY_STAGE_ACTION_CFN])
 ## END DEPLOY ##
 ## INVOKE STAGE ##
-INVOKE_STAGE_ACTION = set_invoke_action([InputArtifacts(Name="BuildOutput")], [OutputArtifacts(Name='CfnTemplate')], FunctionName='somethingsimple')
+INVOKE_STAGE_ACTION = set_invoke_action([InputArtifacts(Name="BuildOutput")], [OutputArtifacts(Name='CfnTemplate')], FunctionName=Ref(PIPELINE_FUNCTION))
 INVOKE_STAGE = set_stage('Invoke', [INVOKE_STAGE_ACTION])
 
 ## END INVOKE ##
@@ -156,6 +166,7 @@ PIPELINE = pipeline_build(
     ROLE,
     Ref(BUCKET_NAME)
 )
+
 TEMPLATE.add_resource(PIPELINE)
 if ARGS.json:
     print(TEMPLATE.to_json())
