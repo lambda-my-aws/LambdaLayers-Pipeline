@@ -18,7 +18,7 @@ from cloudformation.resources.devtools.buildproject import (
     get_build_project
 )
 from cloudformation.tags.s3 import s3_default_tags
-from cloudformation.policies import LAMBDA_BASIC_EXEC
+from cloudformation.policies import AWS_LAMBDA_BASIC_EXEC
 from cloudformation.policies.role import role_trust_policy
 from cloudformation.tags.codebuild import codebuild_default_tags
 from codebuild.runtime import generate_runtime_mapping_and_parameters
