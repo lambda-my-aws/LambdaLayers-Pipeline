@@ -33,7 +33,7 @@ TEMPLATE.set_description("S3 Bucket to which is replicated objects from another 
 BUCKET_NAME = TEMPLATE.add_parameter(Parameter(
     'S3BucketName',
     Type="String",
-    AllowedPattern='[a-z-]+'
+    AllowedPattern='[a-z0-9-]+'
 ))
 BUCKET = TEMPLATE.add_resource(bucket_build(Ref(BUCKET_NAME), UseEncryption=True))
 BUCKET_SSM = TEMPLATE.add_resource(

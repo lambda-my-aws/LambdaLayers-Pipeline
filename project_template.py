@@ -7,7 +7,8 @@ from troposphere import (
     Parameter
 )
 from troposphere import (
-    Ref
+    Ref,
+    Sub
 )
 from cloudformation.outputs import (
     output_with_export,
@@ -47,9 +48,9 @@ TEMPLATE.add_mapping('Languages', MAPPINGS_PARAMS[1])
 BUCKET = TEMPLATE.add_parameter(Parameter(
     'PipelineBucket',
     Type="String",
-    AllowedPattern="[a-z-]+"
+    AllowedPattern="[a-z0-9-]+"
 ))
-ROLE = role_build(Ref(BUCKET))
+ROLE = role_build(Sub(f'arn:aws:s3:::${{{BUCKET.title}}}/*'))
 PROJECT = get_build_project(
     ROLE,
     RUNTIME_LANGUAGE.title,

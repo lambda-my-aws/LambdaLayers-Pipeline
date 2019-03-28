@@ -88,7 +88,8 @@ ROLE = TEMPLATE.add_resource(
     pipelinerole_build(
         Bucket=Ref(BUCKET_NAME),
         UseCloudformation=True,
-        UseCodeBuild=True
+        UseCodeBuild=True,
+        UseLambda=True
     )
 )
 
