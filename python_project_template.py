@@ -54,9 +54,12 @@ PROJECT = get_build_project(
     RUNTIME_LANGUAGE.title,
     RUNTIME_VERSIONS.title,
     **{
-        '10-technical:team': 'PlatformEngineering',
-        '10-technical:runtime_language' : Ref(RUNTIME_LANGUAGE),
-        '10-technical:runtime_version' : Ref(RUNTIME_VERSIONS)
+        'Tags':{
+            '10-technical:team': 'PlatformEngineering',
+            '10-technical:runtime_language' : Ref(RUNTIME_LANGUAGE),
+            '10-technical:runtime_version' : Ref(RUNTIME_VERSIONS)
+        },
+        'SourceType': 'CODEPIPELINE'
     }
 )
 TEMPLATE.add_resource(ROLE)

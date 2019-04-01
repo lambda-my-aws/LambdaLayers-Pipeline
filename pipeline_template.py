@@ -20,6 +20,7 @@ from troposphere.codepipeline import (
     OutputArtifacts,
     InputArtifacts
 )
+from cloudformation.filters.patterns import IAM_ROLE_ARN
 from troposphere.codebuild import Project
 from helpers.iam.roles.pipeline_role import pipelinerole_build
 from helpers.devtools.pipeline import (
@@ -62,13 +63,12 @@ TEMPLATE.set_description('Pipeline template')
 
 BUCKET_NAME = TEMPLATE.add_parameter(Parameter(
     'BucketName',
-    Type="String",
-    AllowedPattern="[a-z]+"
+    Type="String"
 ))
 LAYER_NAME = TEMPLATE.add_parameter(Parameter(
     'LayerName',
     Type="String",
-    AllowedPattern="[a-z]+"
+    AllowedPattern="[a-z-]+"
 ))
 PIPELINE_FUNCTION = TEMPLATE.add_parameter(Parameter(
     'TemplateGeneratorFunction',
@@ -79,19 +79,40 @@ TOKEN = TEMPLATE.add_parameter(Parameter(
     Type="String",
     NoEcho=True
 ))
-BUILD_STACKS = TEMPLATE.add_parameter(Parameter(
+BUILD_STACKS_PARAM = TEMPLATE.add_parameter(Parameter(
     'BuildStacks',
     Type="CommaDelimitedList"
 ))
 
 ROLE = TEMPLATE.add_resource(
     pipelinerole_build(
-        Bucket=Ref(BUCKET_NAME),
+        Bucket=Sub('arn:aws:s3:::${BucketName}/*'),
         UseCloudformation=True,
         UseCodeBuild=True,
         UseLambda=True
     )
 )
+MERGE_STACK_NAME = TEMPLATE.add_parameter(Parameter(
+    'MergeStackName',
+    Type="String"
+))
+REPOSITORY_NAME = TEMPLATE.add_parameter(Parameter(
+    'RepositoryName',
+    Type="String"
+))
+GITHUB_OWNER = TEMPLATE.add_parameter(Parameter(
+    'GithubOwner',
+    Type="String"
+))
+BRANCH_NAME = TEMPLATE.add_parameter(Parameter(
+    'BranchName',
+    Type="String"
+))
+CFN_ROLE_ARN = TEMPLATE.add_parameter(Parameter(
+    'CloudformationRoleArn',
+    Type="String",
+    AllowedPattern=IAM_ROLE_ARN
+))
 
 ## SOURCE_STAGE ##
 SOURCE_OUTPUT_ARTIFACT = OutputArtifacts(
@@ -102,9 +123,9 @@ SOURCE_STAGE_ACTION = set_source_action(
     SOURCE_OUTPUTS,
     UseGitHub=True,
     Configuration={
-        'Repo': 'layer-troposphere',
-        'Branch': 'master',
-        'Owner': 'lambda-my-aws',
+        'Repo': Ref(REPOSITORY_NAME),
+        'Branch': Ref(BRANCH_NAME),
+        'Owner': Ref(GITHUB_OWNER),
         'OAuthToken': Ref(TOKEN)
     }
 )
@@ -120,40 +141,51 @@ BUILD_ACTIONS = []
 ACOUNT = 'A'
 NCOUNT = 0
 BUILD_STACKS = []
+MERGE_INPUTS = []
 if ARGS.build_stacks:
     BUILD_STACKS = ARGS.build_stacks
 for build in BUILD_STACKS:
     resource_type = get_resource_type(Project)
     BUILD_ACTIONS.append(
         set_build_action(
+            f'BuildLayer{ACOUNT}',
             BUILD_INPUTS,
             [
                 OutputArtifacts(Name=f'BuildOutput{ACOUNT}')
             ],
-            ImportValue(Sub(f'${{Stack}}-{resource_type}-Name', Stack=Select(NCOUNT, Ref(BUILD_STACKS))))
+            ImportValue(Sub(f'${{Stack}}-{resource_type}-Name', Stack=Select(NCOUNT, Ref(BUILD_STACKS_PARAM))))
         )
     )
-    COUNT = INC(ACOUNT)
+    MERGE_INPUTS.append(InputArtifacts(Name=f'BuildOutput{ACOUNT}'))
+    ACOUNT = INC(ACOUNT)
     NCOUNT += 1
 BUILD_STAGE = set_stage('Build', BUILD_ACTIONS)
 ## END ##
-## DEPLOY STAGE ##
+## MERGE STAGE ##
+MERGE_ACTIONS = [set_build_action('MergeLayers', MERGE_INPUTS, [OutputArtifacts(Name="LayersMerged")], ImportValue(Sub(f'${{MergeStackName}}-{resource_type}-Name')))]
+MERGE_STAGE = set_stage('MergeLayers', MERGE_ACTIONS)
+## END MERGE ##
+## INVOKE STAGE ##
+INVOKE_STAGE_ACTION = set_invoke_action(
+    [InputArtifacts(
+        Name="LayersMerged")],
+    [OutputArtifacts(Name='CfnTemplate')],
+    FunctionName=Ref(PIPELINE_FUNCTION)
+)
+INVOKE_STAGE = set_stage('Invoke', [INVOKE_STAGE_ACTION])
 
-DEPLOY_INPUTS = [InputArtifacts(Name="InputForCfn")]
+## END INVOKE ##
+## DEPLOY STAGE ##
+DEPLOY_INPUTS = [InputArtifacts(Name="CfnTemplate")]
 DEPLOY_STAGE_ACTION_CFN = set_deploy_action(
     DEPLOY_INPUTS,
     DeployProvider='Cloudformation',
-    CloudformationRole='arn:aws:iam::123456789012:role/toto',
+    CloudformationRole='arn:aws:iam::234354856264:role/cfnonly',
     StackName=Ref(LAYER_NAME),
     TemplatePath="CfnTemplate::template.json"
 )
 DEPLOY_STAGE = set_stage('Deploy', [DEPLOY_STAGE_ACTION_CFN])
 ## END DEPLOY ##
-## INVOKE STAGE ##
-INVOKE_STAGE_ACTION = set_invoke_action([InputArtifacts(Name="BuildOutput")], [OutputArtifacts(Name='CfnTemplate')], FunctionName=Ref(PIPELINE_FUNCTION))
-INVOKE_STAGE = set_stage('Invoke', [INVOKE_STAGE_ACTION])
-
-## END INVOKE ##
 
 ### END STAGES ###
 
@@ -161,6 +193,7 @@ PIPELINE = pipeline_build(
     [
         SOURCE_STAGE,
         BUILD_STAGE,
+        MERGE_STAGE,
         INVOKE_STAGE,
         DEPLOY_STAGE
     ],
@@ -173,4 +206,5 @@ if ARGS.json:
     print(TEMPLATE.to_json())
 else:
     print(TEMPLATE.to_yaml())
+
 
