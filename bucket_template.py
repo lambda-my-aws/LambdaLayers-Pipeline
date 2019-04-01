@@ -18,7 +18,7 @@ from cloudformation.outputs import (
     output_with_export
 )
 from cloudformation.tags.s3 import s3_default_tags
-from cloudformation.resources.s3.bucket import bucket_build
+from helpers.s3.bucket import bucket_build
 import argparse
 
 PARSER = argparse.ArgumentParser("replica bucket with kms ey for encryption")

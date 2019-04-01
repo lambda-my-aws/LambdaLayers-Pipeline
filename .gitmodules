@@ -4,3 +4,6 @@
 [submodule "codebuild"]
 	path = codebuild
 	url = git@github.com:lambda-my-aws/Layer-codebuild.git
+[submodule "helpers"]
+	path = helpers
+	url = git@github.com:lambda-my-aws/layer-helpers

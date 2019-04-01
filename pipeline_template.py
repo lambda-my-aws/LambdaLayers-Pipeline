@@ -21,8 +21,8 @@ from troposphere.codepipeline import (
     InputArtifacts
 )
 from troposphere.codebuild import Project
-from cloudformation.resources.iam.pipeline_role import pipelinerole_build
-from cloudformation.resources.devtools.pipeline import (
+from helpers.iam.roles.pipeline_role import pipelinerole_build
+from helpers.devtools.pipeline import (
     use_github_source,
     use_codecommit_source,
     set_source_action,

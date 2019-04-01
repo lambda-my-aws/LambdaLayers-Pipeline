@@ -14,14 +14,12 @@ from cloudformation.outputs import (
     output_with_export,
     output_no_export
 )
-from cloudformation.resources.devtools.buildproject import (
+from helpers.devtools.buildproject import (
     role_build,
     get_build_project
 )
-from cloudformation.tags.s3 import s3_default_tags
-from cloudformation.policies import AWS_LAMBDA_BASIC_EXEC
-from cloudformation.policies.role import role_trust_policy
-from cloudformation.tags.codebuild import codebuild_default_tags
+from helpers.iam import AWS_LAMBDA_BASIC_EXEC
+from helpers.iam.roles import role_trust_policy
 from codebuild.runtime import generate_runtime_mapping_and_parameters
 
 TEAM_LANGUAGES= ['python', 'docker', 'base', 'node_js']
