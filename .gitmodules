@@ -7,3 +7,6 @@
 [submodule "helpers"]
 	path = helpers
 	url = git@github.com:lambda-my-aws/layer-helpers
+[submodule "lambdatools"]
+	path = lambdatools
+	url = git@github.com:lambda-my-aws/layer-lambdatools
