@@ -1,78 +1,98 @@
 #!/usr/bin/env python
 
+from troposphere import Tags
+from ozone.templates.awslambdalayer_pipeline import template as pipeline
+from ozone.handlers.lambda_tools import check_params_exist
+from ozone.handlers.stack_manage import create_update_stack
 
-from troposphere import Template
-from cloudformation.outputs import output_no_export
-from helpers.devtools.pipeline import (
-    SourceAction,
-    BuildAction,
-    DeployAction,
-    InvokeAction,
-    CodePipeline
-)
-source = SourceAction(
-    name="GitRepoXyZ",
-    provider='GitHub',
-    config={
-        'Repo': 'somerepo',
-        'Branch': 'master',
-        'Owner': 'me',
-        'OAuthToken': '12345'
+
+def template_build(event):
+    """
+    Args:
+      event: lambda function event
+    Returns:
+      template Template()
+    """
+    template = pipeline(**event)
+    return template
+
+
+def lambda_handler(event, context=None):
+    """
+    Args:
+      event: Lambda event call parameters
+      context: Lambda event context (user specified)
+    Returns based on arguments:
+      template Template()
+      JSON String of the rendered template
+      AWS CloudFormation StackName
+    """
+    template_uri = None
+    required_params = [
+        'TemplatesBucket',
+        'CloudformationRoleArn', 'StackTags', 'Region', 'SnsTopics',
+        'TemplateArgs'
+    ]
+    assert check_params_exist(required_params, event)
+    template = template_build(event['TemplateArgs'])
+    template_body = template.to_json()
+    print(template_body)
+    if len(template_body) > 51200:
+        template_uri = create_template_in_s3(event['TemplatesBucket'], event['BucketName'], template_body)
+    cfn_args = {
+        'StackName': f'pipeline-layer-{event["TemplateArgs"]["LayerName"]}',
+        'RoleARN': event['CloudformationRoleArn'],
+        'OnFailure' : 'DELETE',
+        'EnableTerminationProtection': True,
+        'NotificationARNs': event['SnsTopics'],
+        'Tags': Tags(event['StackTags']).to_dict()
     }
-)
+    if template_uri is not None and tempalte_uri[0]:
+        cfn_args['TemplateURL'] = template_uri[1]
+    else:
+        cfn_args['TemplateBody'] = template_body
+    try:
+        response = create_update_stack(event['Region'], **cfn_args)
+        return response
+    except Exception as error:
+        print(error)
+        return {'StackId': None}
 
-build_actions = []
-builds_projects = ['python37', 'python36']
-for project in builds_projects:
-    build_actions.append(BuildAction(
-        project,
-        source.outputs,
-        project
-    ))
 
-build_outputs = []
-for action in build_actions:
-    build_outputs += action.outputs
+if __name__ == '__main__':
+    from argparse import ArgumentParser
+    PARSER = ArgumentParser()
+    PARSER.add_argument('--templates-bucket', required=True)
+    PARSER.add_argument('--role-arn', required=True)
+    PARSER.add_argument('--sns-topics', required=True, action='append')
+    PARSER.add_argument('--region', required=True)
+    ARGS = PARSER.parse_args()
 
-merge_action = BuildAction(
-    'MergeAction',
-    build_outputs,
-    'buil-merge-project'
-)
-
-invoke = InvokeAction(
-    'GenerateCfnTemplate',
-    source.outputs,
-    'nameofthefunction',
-    UserParameters='layer-abcd'
-)
-
-input_name = source.outputs[0].Name
-deploy = DeployAction(
-    'DeployToCfn',
-    build_actions[0].outputs,
-    'CloudFormation',
-    StackName='nameofthestack',
-    RoleArn='roleforcloudformation',
-    TemplatePath=f'{input_name}::tmp/template.json'
-)
-
-stages = [
-    ('Source', [source]),
-    ('BuildLayers', build_actions),
-    ('MergeLayers', [merge_action]),
-    ('GenerateCfnTemplate', [invoke]),
-    ('DeployWithCfn', [deploy]),
-]
-
-pipe = CodePipeline(
-    'Pipeline',
-    'somerole',
-    'somes3bucket',
-    stages
-)
-
-template = Template()
-template.add_resource(pipe)
-template.add_output(output_no_export(pipe))
-print(template.to_yaml())
+    TEMPLATE_ARGS = {
+        'Source' : {
+            'Provider': 'GitHub',
+            'Config': {
+                'Repo': 'Layer-troposphere',
+                'Owner': 'lambda-my-aws',
+                'Branch': 'master'
+            }
+        },
+        'CloudformationRoleArn': 'somerole',
+        'LayerBuildProjects': [
+            'build-lambdalayers-python371',
+            'build-lambdalayers-python365'
+        ],
+        'LayersMergeProject': 'build-lambdalayers-mergelayers',
+        'LayerName': 'troposphere',
+        'GeneratorFunctionName': 'function-layertemplatebuilder',
+        'BucketName': 'artifacts-bucket'
+    }
+    EVENT = {
+        'TemplatesBucket': ARGS.templates_bucket,
+        'CloudformationRoleArn': ARGS.role_arn,
+        'SnsTopics': ARGS.sns_topics,
+        'Region': ARGS.region,
+        'StackTags': {'10-technical:region': 'eu-west-1'}
+    }
+    EVENT['TemplateArgs'] = TEMPLATE_ARGS
+    response = lambda_handler(EVENT, None)

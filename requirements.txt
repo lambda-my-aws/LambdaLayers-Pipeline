@@ -1,5 +1,1 @@
-cfn-flip==1.1.0.post1
-Click==7.0
-PyYAML==5.1b5
-six==1.12.0
-troposphere==2.4.6
+ozone>=0.0.4
