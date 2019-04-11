@@ -35,7 +35,7 @@ def lambda_handler(event, context=None):
     ]
     assert check_params_exist(required_params, event)
     template = template_build(event['TemplateArgs'])
-    template_body = template.to_json()
+    template_body = template.to_yaml()
     print(template_body)
     if len(template_body) > 51200:
         template_uri = create_template_in_s3(event['TemplatesBucket'], event['BucketName'], template_body)
@@ -45,7 +45,14 @@ def lambda_handler(event, context=None):
         'OnFailure' : 'DELETE',
         'EnableTerminationProtection': True,
         'NotificationARNs': event['SnsTopics'],
-        'Tags': Tags(event['StackTags']).to_dict()
+        'Tags': Tags(event['StackTags']).to_dict(),
+        'Capabilities': ['CAPABILITY_IAM'],
+        'Parameters': [
+            {
+                'ParameterKey': "GitHubOAuthToken",
+                'ParameterValue': event['TemplateArgs']['OAuthToken']
+            }
+        ]
     }
     if template_uri is not None and tempalte_uri[0]:
         cfn_args['TemplateURL'] = template_uri[1]
@@ -63,29 +70,32 @@ if __name__ == '__main__':
     from argparse import ArgumentParser
     PARSER = ArgumentParser()
     PARSER.add_argument('--templates-bucket', required=True)
+    PARSER.add_argument('--artifacts-bucket', required=True)
     PARSER.add_argument('--role-arn', required=True)
     PARSER.add_argument('--sns-topics', required=True, action='append')
     PARSER.add_argument('--region', required=True)
+    PARSER.add_argument('--token', required=True)
     ARGS = PARSER.parse_args()
 
     TEMPLATE_ARGS = {
         'Source' : {
             'Provider': 'GitHub',
             'Config': {
-                'Repo': 'Layer-troposphere',
+                'Repo': 'ozone',
                 'Owner': 'lambda-my-aws',
                 'Branch': 'master'
             }
         },
-        'CloudformationRoleArn': 'somerole',
+        'OAuthToken': ARGS.token,
+        'CloudformationRoleArn': ARGS.role_arn,
         'LayerBuildProjects': [
-            'build-lambdalayers-python371',
-            'build-lambdalayers-python365'
+            'lambdalayers-buildproject-python371',
+            'lambdalayers-buildproject-python365'
         ],
-        'LayersMergeProject': 'build-lambdalayers-mergelayers',
-        'LayerName': 'troposphere',
+        'LayersMergeProject': 'lambdalayers-buildproject-mergelayers',
+        'LayerName': 'ozone',
         'GeneratorFunctionName': 'function-layertemplatebuilder',
-        'BucketName': 'artifacts-bucket'
+        'BucketName': ARGS.artifacts_bucket
     }
     EVENT = {
         'TemplatesBucket': ARGS.templates_bucket,

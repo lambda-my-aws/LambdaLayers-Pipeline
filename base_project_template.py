@@ -10,17 +10,14 @@ from troposphere import (
     Ref,
     Sub
 )
-from cloudformation.outputs import (
-    output_with_export,
-    output_no_export
-)
-from helpers.devtools.buildproject import (
+from ozone.outputs import object_outputs
+from ozone.resources.devtools.buildproject import (
     role_build,
     get_build_project
 )
-from helpers.iam import AWS_LAMBDA_BASIC_EXEC
-from helpers.iam.roles import role_trust_policy
-from codebuild.runtime import generate_runtime_mapping_and_parameters
+from ozone.resources.iam.policies import AWS_LAMBDA_BASIC_EXEC
+from ozone.resources.iam.roles import role_trust_policy
+from ozone.resolvers.codebuild.runtime import generate_runtime_mapping_and_parameters
 
 TEAM_LANGUAGES= ['python', 'docker', 'base', 'node_js']
 
@@ -66,7 +63,7 @@ PROJECT = get_build_project(
 TEMPLATE.add_resource(ROLE)
 TEMPLATE.add_resource(PROJECT)
 TEMPLATE.add_output(
-    output_with_export(
+    object_outputs(
         PROJECT, True,
         RunTimeLanguage=RUNTIME_LANGUAGE,
         RunTimeVersions=RUNTIME_VERSIONS
